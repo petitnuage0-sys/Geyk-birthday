@@ -160,15 +160,6 @@
   .qmain{flex:1;min-width:280px;display:flex;flex-direction:column;gap:.8rem}
   .qheader{font-variant:small-caps;letter-spacing:.08em;font-size:1.05rem;opacity:.9}
   .qtext{font-size:1.9rem;line-height:1.35;font-weight:bold;flex:1}
-  .qquote{
-    font-style:italic;font-size:.95rem;opacity:.85;
-    border-left:4px solid var(--gold-light);padding-left:.7rem;
-    color:var(--text-light);
-  }
-  #qzone.general .qquote{
-    color:rgba(255,255,255,0.85);
-    border-left-color:rgba(255,215,0,0.6);
-  }
   .qactions{display:flex;gap:.7rem;flex-wrap:wrap}
   .qactions .btn{font-size:1.05rem}
   #winnerPick{display:flex;gap:.6rem;flex-wrap:wrap;margin:.4rem 0}
@@ -348,18 +339,6 @@ const MAX_MONTHS = 360;
 const AGES = 31;
 const DEFAULT_COLORS = ["#2b4a76", "#c0392b", "#1e7a4a", "#b8860b", "#6a3d9a"];
 const DEFAULT_TEAM_NAMES = ["Équipe Scranton", "Équipe Schrute Farms", "Équipe Sales", "Équipe Comptabilité", "Équipe Party Planning"];
-const QUOTES = [
-  "« Je suis sans doute l'un des meilleurs bosses du monde. » — Michael Scott",
-  "« Faux. » — Dwight Schrute",
-  "« That's what she said. » — Michael Scott",
-  "« Les amis sont les ennemis qui vous connaissent le mieux. » — Dwight Schrute",
-  "« Il n'y a pas de « je » dans équipe, mais il y en a un dans victoire. » — Michael Scott",
-  "« Je déclare la bankruptcy ! » — Michael Scott",
-  "« Limite dans le temps… That's what she said. » — Michael Scott",
-  "« Identité volée n'est pas une blague, Jim ! Des millions de familles souffrent chaque année ! » — Dwight",
-  "« Bears. Beets. Battlestar Galactica. » — Jim Halpert",
-  "« Le pire jour de ma vie… pour l'instant. » — Toby Flenderson (probablement)"
-];
 const DEFAULT_TEAM_QUESTIONS = [
   "Germain, géranium ou les deux ? Fonctionne a l'eau fraiche, et au soleil .",
   "Germain, géranium ou les deux ? Espérance de vie de 2 semaines si détenu par le second.",
@@ -450,7 +429,6 @@ function placeholderSVG(age, color) {
   </svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
-function quote() { return QUOTES[Math.floor(Math.random() * QUOTES.length)]; }
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   $(id).classList.add("active");
@@ -708,11 +686,6 @@ function renderQuestion() {
     qtext.appendChild(parseQuestionWithImages(q));
     qmain.appendChild(qtext);
     
-    const qquote = document.createElement('div');
-    qquote.className = 'qquote';
-    qquote.innerHTML = quote();
-    qmain.appendChild(qquote);
-    
     const qactions = document.createElement('div');
     qactions.className = 'qactions';
     qactions.innerHTML = `
@@ -740,11 +713,6 @@ function renderQuestion() {
     qtext.className = 'qtext';
     qtext.appendChild(parseQuestionWithImages(q));
     qmain.appendChild(qtext);
-    
-    const qquote = document.createElement('div');
-    qquote.className = 'qquote';
-    qquote.innerHTML = quote();
-    qmain.appendChild(qquote);
     
     const winnerLabel = document.createElement('div');
     winnerLabel.className = 'qheader';
@@ -882,7 +850,6 @@ function showEnd(winners) {
         </div>`;
       }).join("")}
     </div>
-    <div style="font-style:italic;margin-bottom:1rem">« That's what she said. » — Michael Scott, probablement</div>
     <button class="btn primary" id="btnReplay">🔄 Rejouer (âges à zéro)</button>
     <button class="btn gray" id="btnToSetup">⚙ Retour aux réglages</button>`;
   for (let i = 0; i < 80; i++) {
