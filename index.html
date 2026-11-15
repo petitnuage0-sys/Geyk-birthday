@@ -231,6 +231,60 @@
     object-fit:contain;background:rgba(255,255,255,0.9);
     padding:4px;
   }
+  /* ===== MULTIPLE CHOICE ===== */
+  .choices-container{
+    display:flex;flex-direction:column;gap:.6rem;margin:1rem 0;
+    flex:1;
+  }
+  .choice-btn{
+    padding:.8rem 1.2rem;border:3px solid var(--gold);
+    border-radius:10px;background:rgba(255,255,255,0.95);
+    color:var(--accent);font-size:1.1rem;font-weight:bold;
+    cursor:pointer;transition:all .2s;
+    text-align:left;display:flex;align-items:center;gap:.8rem;
+  }
+  .choice-btn:hover{
+    background:var(--gold-light);
+    transform:translateX(4px);
+  }
+  .choice-btn.selected{
+    background:var(--gold);color:var(--accent);
+    border-color:var(--accent-dark);
+    box-shadow:0 4px 12px rgba(255,215,0,0.4);
+  }
+  .choice-btn.correct{
+    background:#2ecc71;color:#fff;border-color:#25a85f;
+    animation:pulse-green .5s;
+  }
+  .choice-btn.incorrect{
+    background:#e85a7a;color:#fff;border-color:#d14a6a;
+    animation:shake .5s;
+  }
+  .choice-letter{
+    font-weight:bold;font-size:1.3rem;min-width:30px;
+    background:var(--accent);color:#fff;
+    border-radius:50%;width:30px;height:30px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .choice-btn.selected .choice-letter,
+  .choice-btn.correct .choice-letter,
+  .choice-btn.incorrect .choice-letter{
+    background:#fff;color:inherit;
+  }
+  .choice-text{flex:1;}
+  .validate-mc{
+    margin-top:1rem;display:flex;gap:.8rem;justify-content:center;
+  }
+  @keyframes pulse-green{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.02);}
+  }
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-5px);}
+    75%{transform:translateX(5px);}
+  }
 </style>
 </head>
 <body>
@@ -282,6 +336,7 @@
     <div class="card tabpane" id="tab-questions">
       <h2>Questions</h2>
       <p class="hint">Une question par ligne. Les questions d'équipe sont posées dans la couleur de l'équipe ; la question générale est posée à toutes les équipes à la fin de chaque manche. Les listes tourneront en boucle si tu n'en mets pas beaucoup.</p>
+      <p class="hint"><b>Choix multiples :</b> Pour créer une question avec choix, écrivez la question, puis chaque choix sur une nouvelle ligne (A. Réponse 1, B. Réponse 2, etc.), et terminez par <code>[answer]A[/answer]</code> ou <code>[answer]A,B[/answer]</code> pour plusieurs bonnes réponses. Exemple :<br><code>Quel est son prénom?\nA. Germain\nB. Gérard\n[answer]A[/answer]</code></p>
       <label style="color:var(--navy);font-weight:bold">🎯 Questions d'équipe (une par ligne)</label>
       <textarea id="taTeamQ" spellcheck="false"></textarea>
       <br><br>
@@ -351,19 +406,24 @@ const DEFAULT_TEAM_QUESTIONS = [
   "Germain, germanique ou les deux ? Mesure 1m72-75",
   "Germain, germanique ou les deux ? Il adore dessiner ",
   "Germain, germanique ou les deux ? Aime tendre la main vers son prochain",
-  "Germain, germanique ou les deux ? Chef d’un mouvement de jeunesse?"
+  "Germain, germanique ou les deux ? Chef d'un mouvement de jeunesse?",
+  "Quel est le prénom de Germain?\nA. Germain\nB. Geraud\nC. Gerald\n[answer]A[/answer]",
+  "Où Germain a-t-il étudié?\nA. Toulouse\nB. Bordeaux\nC. Lyon\nD. Paris\n[answer]A,B[/answer]"
 ];
 const DEFAULT_GEN_QUESTIONS = [
   "Question générale : première équipe à crier le titre complet de son master.",
   "Question générale : quelle équipe compte le plus d'années cumulées de connaissance de Germain?",
   "Question générale : quel est le bon cri du coliou?",
   "Question générale : vrai/faux messages de Germain",
-  "Question générale : battle de retard, quelle équipe a la pire anectdote de retard de Germain?"
+  "Question générale : battle de retard, quelle équipe a la pire anectdote de retard de Germain?",
+  "Quel est l'âge de Germain aujourd'hui?\nA. 25 ans\nB. 28 ans\nC. 30 ans\n[answer]C[/answer]"
 ];
 
 let state = load() || defaults();
 let pendingWinners = new Set();
 let aging = false;
+let selectedChoices = new Set();
+let currentQuestionHasChoices = false;
 
 function defaults() {
   return {
@@ -604,9 +664,53 @@ function renderScoreboard() {
 }
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
-/* ---------- Question Image Parser ---------- */
+/* ---------- Question Parser (images + choix multiples) ---------- */
 function isSafeUrl(url) {
   return url.match(/^(https?:|\/|data:image\/)/);
+}
+
+function parseQuestion(text) {
+  const result = {
+    text: '',
+    hasChoices: false,
+    choices: [],
+    correctAnswers: []
+  };
+
+  // Extraire les réponses correctes
+  const answerMatch = text.match(/\[answer\]([^\[]+)\[\/answer\]/);
+  if (answerMatch) {
+    result.correctAnswers = answerMatch[1].split(',').map(a => a.trim().toUpperCase());
+  }
+
+  // Extraire les choix (lignes commençant par une lettre suivie d'un point)
+  const choiceRegex = /^([A-Z])\.\s*(.+)$/gm;
+  let choiceMatch;
+  const choiceLines = [];
+  
+  while ((choiceMatch = choiceRegex.exec(text)) !== null) {
+    choiceLines.push({
+      letter: choiceMatch[1],
+      text: choiceMatch[2]
+    });
+  }
+
+  if (choiceLines.length > 0) {
+    result.hasChoices = true;
+    result.choices = choiceLines;
+    
+    // Nettoyer le texte de la question en supprimant les lignes de choix et la balise answer
+    const lines = text.split('\n');
+    const questionLines = lines.filter(line => {
+      const trimmed = line.trim();
+      return !choiceRegex.test(trimmed) && !trimmed.match(/\[answer\].*\[\/answer\]/);
+    });
+    result.text = questionLines.join('\n').trim();
+  } else {
+    result.text = text;
+  }
+
+  return result;
 }
 
 function parseQuestionWithImages(text) {
@@ -616,7 +720,6 @@ function parseQuestionWithImages(text) {
   let match;
 
   while ((match = imgRegex.exec(text)) !== null) {
-    // Add text before the image
     if (match.index > lastIndex) {
       const textPart = text.substring(lastIndex, match.index);
       const span = document.createElement('span');
@@ -624,7 +727,6 @@ function parseQuestionWithImages(text) {
       fragment.appendChild(span);
     }
     
-    // Add the image
     const url = match[1].trim();
     if (isSafeUrl(url)) {
       const img = document.createElement('img');
@@ -637,7 +739,6 @@ function parseQuestionWithImages(text) {
     lastIndex = match.index + match[0].length;
   }
   
-  // Add remaining text
   if (lastIndex < text.length) {
     const span = document.createElement('span');
     span.textContent = text.substring(lastIndex);
@@ -651,6 +752,8 @@ function renderQuestion() {
   const z = $("qzone");
   z.className = "";
   pendingWinners = new Set();
+  selectedChoices = new Set();
+  currentQuestionHasChoices = false;
   
   // Clear existing content
   z.innerHTML = "";
@@ -662,6 +765,10 @@ function renderQuestion() {
     z.style.color = "#fff";
     const ph = photoFor(team, team.months);
     const imgSrc = ph ? ph.src : placeholderSVG(yearsOf(team.months), team.color);
+    
+    // Parse the question to check if it has choices
+    const parsed = parseQuestion(q);
+    currentQuestionHasChoices = parsed.hasChoices;
     
     // Create plaque
     const plaque = document.createElement('div');
@@ -683,22 +790,66 @@ function renderQuestion() {
     
     const qtext = document.createElement('div');
     qtext.className = 'qtext';
-    qtext.appendChild(parseQuestionWithImages(q));
+    qtext.appendChild(parseQuestionWithImages(parsed.text));
     qmain.appendChild(qtext);
     
-    const qactions = document.createElement('div');
-    qactions.className = 'qactions';
-    qactions.innerHTML = `
-      <button class="btn green" id="btnOk">✅ Réussie (+${state.settings.winYears} an${state.settings.winYears > 1 ? "s" : ""})</button>
-      <button class="btn red" id="btnKo">❌ Ratée (+${state.settings.failMonths} mois)</button>`;
-    qmain.appendChild(qactions);
+    // Add choices if present
+    if (parsed.hasChoices) {
+      const choicesContainer = document.createElement('div');
+      choicesContainer.className = 'choices-container';
+      
+      parsed.choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.innerHTML = `
+          <span class="choice-letter">${choice.letter}</span>
+          <span class="choice-text">${esc(choice.text)}</span>`;
+        btn.dataset.letter = choice.letter;
+        btn.onclick = () => {
+          // Toggle selection
+          if (selectedChoices.has(choice.letter)) {
+            selectedChoices.delete(choice.letter);
+            btn.classList.remove('selected');
+          } else {
+            selectedChoices.add(choice.letter);
+            btn.classList.add('selected');
+          }
+          // Update answer buttons
+          updateAnswerButtons(parsed, team);
+        };
+        choicesContainer.appendChild(btn);
+      });
+      qmain.appendChild(choicesContainer);
+      
+      const validateDiv = document.createElement('div');
+      validateDiv.className = 'validate-mc';
+      validateDiv.innerHTML = `
+        <button class="btn green" id="btnOk" disabled>✅ Valider</button>
+        <button class="btn red" id="btnKo">❌ Passer</button>`;
+      qmain.appendChild(validateDiv);
+    } else {
+      const qactions = document.createElement('div');
+      qactions.className = 'qactions';
+      qactions.innerHTML = `
+        <button class="btn green" id="btnOk">✅ Réussie (+${state.settings.winYears} an${state.settings.winYears > 1 ? "s" : ""})</button>
+        <button class="btn red" id="btnKo">❌ Ratée (+${state.settings.failMonths} mois)</button>`;
+      qmain.appendChild(qactions);
+    }
     z.appendChild(qmain);
     
-    $("btnOk").onclick = () => resolveTeam(team, Math.round(state.settings.winYears * 12));
-    $("btnKo").onclick = () => resolveTeam(team, state.settings.failMonths);
+    if (parsed.hasChoices) {
+      updateAnswerButtons(parsed, team);
+      $("btnKo").onclick = () => resolveTeam(team, state.settings.failMonths);
+    } else {
+      $("btnOk").onclick = () => resolveTeam(team, Math.round(state.settings.winYears * 12));
+      $("btnKo").onclick = () => resolveTeam(team, state.settings.failMonths);
+    }
   } else {
     const q = state.questions.general[state.qi.general % state.questions.general.length];
     z.classList.add("general");
+    
+    const parsed = parseQuestion(q);
+    currentQuestionHasChoices = parsed.hasChoices;
     
     const qmain = document.createElement('div');
     qmain.className = 'qmain';
@@ -711,49 +862,163 @@ function renderQuestion() {
     
     const qtext = document.createElement('div');
     qtext.className = 'qtext';
-    qtext.appendChild(parseQuestionWithImages(q));
+    qtext.appendChild(parseQuestionWithImages(parsed.text));
     qmain.appendChild(qtext);
     
-    const winnerLabel = document.createElement('div');
-    winnerLabel.className = 'qheader';
-    winnerLabel.style.marginTop = '.4rem';
-    winnerLabel.textContent = 'Quelle équipe a gagné ? (clique une ou plusieurs équipes)';
-    qmain.appendChild(winnerLabel);
-    
-    const winnerPick = document.createElement('div');
-    winnerPick.id = 'winnerPick';
-    winnerPick.style.margin = '.4rem 0';
-    state.teams.forEach((t, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'chip';
-      btn.dataset.i = i;
-      btn.style.borderColor = t.color;
-      btn.textContent = esc(t.name);
-      winnerPick.appendChild(btn);
-    });
-    qmain.appendChild(winnerPick);
-    
-    const qactions = document.createElement('div');
-    qactions.className = 'qactions';
-    qactions.innerHTML = `<button class="btn primary" id="btnValGen" disabled>✔ Valider (+${state.settings.genYears} an${state.settings.genYears > 1 ? "s" : ""} aux gagnants)</button>`;
-    qmain.appendChild(qactions);
-    z.appendChild(qmain);
-    
-    z.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
-      const i = +c.dataset.i;
-      if (pendingWinners.has(i)) pendingWinners.delete(i); else pendingWinners.add(i);
-      c.classList.toggle("sel");
-      $("btnValGen").disabled = pendingWinners.size === 0;
-    }));
-    $("btnValGen").onclick = () => {
-      const winners = [...pendingWinners];
-      resolveGeneral(winners);
-    };
+    if (parsed.hasChoices) {
+      // Multiple choice for general question
+      const choicesContainer = document.createElement('div');
+      choicesContainer.className = 'choices-container';
+      
+      parsed.choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.innerHTML = `
+          <span class="choice-letter">${choice.letter}</span>
+          <span class="choice-text">${esc(choice.text)}</span>`;
+        btn.dataset.letter = choice.letter;
+        btn.onclick = () => {
+          if (selectedChoices.has(choice.letter)) {
+            selectedChoices.delete(choice.letter);
+            btn.classList.remove('selected');
+          } else {
+            selectedChoices.add(choice.letter);
+            btn.classList.add('selected');
+          }
+          $("btnValGen").disabled = selectedChoices.size === 0;
+        };
+        choicesContainer.appendChild(btn);
+      });
+      qmain.appendChild(choicesContainer);
+      
+      const winnerLabel = document.createElement('div');
+      winnerLabel.className = 'qheader';
+      winnerLabel.style.marginTop = '.4rem';
+      winnerLabel.textContent = 'Quelle équipe a gagné ? (clique une ou plusieurs équipes)';
+      qmain.appendChild(winnerLabel);
+      
+      const winnerPick = document.createElement('div');
+      winnerPick.id = 'winnerPick';
+      winnerPick.style.margin = '.4rem 0';
+      state.teams.forEach((t, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'chip';
+        btn.dataset.i = i;
+        btn.style.borderColor = t.color;
+        btn.textContent = esc(t.name);
+        winnerPick.appendChild(btn);
+      });
+      qmain.appendChild(winnerPick);
+      
+      const qactions = document.createElement('div');
+      qactions.className = 'qactions';
+      qactions.innerHTML = `<button class="btn primary" id="btnValGen" disabled>✔ Valider (+${state.settings.genYears} an${state.settings.genYears > 1 ? "s" : ""} aux gagnants)</button>`;
+      qmain.appendChild(qactions);
+      z.appendChild(qmain);
+      
+      z.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+        const i = +c.dataset.i;
+        if (pendingWinners.has(i)) pendingWinners.delete(i); else pendingWinners.add(i);
+        c.classList.toggle("sel");
+        $("btnValGen").disabled = pendingWinners.size === 0 || selectedChoices.size === 0;
+      }));
+      
+      $("btnValGen").onclick = () => {
+        const winners = [...pendingWinners];
+        const isCorrect = parsed.correctAnswers.length > 0 && 
+          selectedChoices.size === parsed.correctAnswers.length &&
+          [...selectedChoices].every(choice => parsed.correctAnswers.includes(choice));
+        const gain = isCorrect ? Math.round(state.settings.genYears * 12) : 0;
+        resolveGeneralMC(winners, gain, parsed);
+      };
+    } else {
+      // Standard general question
+      const winnerLabel = document.createElement('div');
+      winnerLabel.className = 'qheader';
+      winnerLabel.style.marginTop = '.4rem';
+      winnerLabel.textContent = 'Quelle équipe a gagné ? (clique une ou plusieurs équipes)';
+      qmain.appendChild(winnerLabel);
+      
+      const winnerPick = document.createElement('div');
+      winnerPick.id = 'winnerPick';
+      winnerPick.style.margin = '.4rem 0';
+      state.teams.forEach((t, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'chip';
+        btn.dataset.i = i;
+        btn.style.borderColor = t.color;
+        btn.textContent = esc(t.name);
+        winnerPick.appendChild(btn);
+      });
+      qmain.appendChild(winnerPick);
+      
+      const qactions = document.createElement('div');
+      qactions.className = 'qactions';
+      qactions.innerHTML = `<button class="btn primary" id="btnValGen" disabled>✔ Valider (+${state.settings.genYears} an${state.settings.genYears > 1 ? "s" : ""} aux gagnants)</button>`;
+      qmain.appendChild(qactions);
+      z.appendChild(qmain);
+      
+      z.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+        const i = +c.dataset.i;
+        if (pendingWinners.has(i)) pendingWinners.delete(i); else pendingWinners.add(i);
+        c.classList.toggle("sel");
+        $("btnValGen").disabled = pendingWinners.size === 0;
+      }));
+      $("btnValGen").onclick = () => {
+        const winners = [...pendingWinners];
+        resolveGeneral(winners);
+      };
+    }
   }
 }
 
+function updateAnswerButtons(parsed, team) {
+  const btnOk = $("btnOk");
+  if (!btnOk) return;
+  
+  // Enable/disable validate button based on selections
+  btnOk.disabled = selectedChoices.size === 0;
+  
+  // Setup click handler for validate button
+  btnOk.onclick = () => {
+    // Check if answer is correct
+    const isCorrect = parsed.correctAnswers.length > 0 && 
+      selectedChoices.size === parsed.correctAnswers.length &&
+      [...selectedChoices].every(choice => parsed.correctAnswers.includes(choice));
+    
+    // Highlight correct/incorrect choices
+    document.querySelectorAll('.choice-btn').forEach(btn => {
+      const letter = btn.dataset.letter;
+      btn.disabled = true;
+      if (isCorrect && parsed.correctAnswers.includes(letter)) {
+        btn.classList.add('correct');
+        btn.classList.remove('selected', 'incorrect');
+      } else if (!isCorrect && parsed.correctAnswers.includes(letter)) {
+        btn.classList.add('correct');
+        btn.classList.remove('selected', 'incorrect');
+      } else if (selectedChoices.has(letter)) {
+        btn.classList.add('incorrect');
+        btn.classList.remove('selected', 'correct');
+      }
+    });
+    
+    // Apply gain based on answer
+    const gain = isCorrect ? Math.round(state.settings.winYears * 12) : state.settings.failMonths;
+    const from = team.months;
+    team.months = Math.min(MAX_MONTHS, from + gain);
+    state.qi.team++;
+    save();
+    
+    setTimeout(() => {
+      animateAging(team, from, team.months, () => {
+        advanceTurn();
+      });
+    }, 1000);
+  };
+}
+
 function resolveTeam(team, gain) {
-  if (aging) return;
+  if (aging || currentQuestionHasChoices) return;
   const from = team.months;
   team.months = Math.min(MAX_MONTHS, from + gain);
   state.qi.team++;
@@ -763,7 +1028,7 @@ function resolveTeam(team, gain) {
   });
 }
 function resolveGeneral(winners) {
-  if (aging || !winners.length) return;
+  if (aging || !winners.length || currentQuestionHasChoices) return;
   const gain = Math.round(state.settings.genYears * 12);
   const moves = winners.map(i => ({ team: state.teams[i], from: state.teams[i].months }));
   moves.forEach(m => { m.team.months = Math.min(MAX_MONTHS, m.from + gain); });
@@ -777,6 +1042,48 @@ function resolveGeneral(winners) {
     renderGame();
     checkEnd();
   });
+}
+
+function resolveGeneralMC(winners, gain, parsed) {
+  if (aging || !winners.length) return;
+  
+  const moves = winners.map(i => ({ team: state.teams[i], from: state.teams[i].months }));
+  moves.forEach(m => { m.team.months = Math.min(MAX_MONTHS, m.from + gain); });
+  state.qi.general++;
+  save();
+  
+  // Highlight correct/incorrect choices
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const letter = btn.dataset.letter;
+    btn.disabled = true;
+    if (parsed.correctAnswers.includes(letter)) {
+      btn.classList.add('correct');
+      btn.classList.remove('selected', 'incorrect');
+    } else if (selectedChoices.has(letter)) {
+      btn.classList.add('incorrect');
+      btn.classList.remove('selected', 'correct');
+    }
+  });
+  
+  setTimeout(() => {
+    if (moves.length > 0) {
+      animateAging(moves[0].team, moves[0].from, moves[0].team.months, () => {
+        state.round++;
+        state.turn = 0;
+        state.phase = "team";
+        save();
+        renderGame();
+        checkEnd();
+      });
+    } else {
+      state.round++;
+      state.turn = 0;
+      state.phase = "team";
+      save();
+      renderGame();
+      checkEnd();
+    }
+  }, 1000);
 }
 function advanceTurn() {
   if (checkEnd()) return;
