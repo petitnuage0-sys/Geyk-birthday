@@ -231,6 +231,15 @@
   .settings-grid{display:flex;gap:1.2rem;flex-wrap:wrap}
   .settings-grid label{display:flex;flex-direction:column;gap:.3rem;font-weight:bold;color:var(--accent)}
   .settings-grid input{width:110px}
+
+  /* ===== QUESTION IMAGES ===== */
+  .question-image{
+    max-width:100%;max-height:250px;border-radius:8px;
+    margin:12px auto;display:block;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
+    object-fit:contain;background:rgba(255,255,255,0.9);
+    padding:4px;
+  }
 </style>
 </head>
 <body>
@@ -617,10 +626,57 @@ function renderScoreboard() {
 }
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
+/* ---------- Question Image Parser ---------- */
+function isSafeUrl(url) {
+  return url.match(/^(https?:|\/|data:image\/)/);
+}
+
+function parseQuestionWithImages(text) {
+  const fragment = document.createDocumentFragment();
+  const imgRegex = /\[img\]([^\[]+)\[\/img\]/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = imgRegex.exec(text)) !== null) {
+    // Add text before the image
+    if (match.index > lastIndex) {
+      const textPart = text.substring(lastIndex, match.index);
+      const span = document.createElement('span');
+      span.textContent = textPart;
+      fragment.appendChild(span);
+    }
+    
+    // Add the image
+    const url = match[1].trim();
+    if (isSafeUrl(url)) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'question-image';
+      img.alt = '';
+      fragment.appendChild(img);
+    }
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    const span = document.createElement('span');
+    span.textContent = text.substring(lastIndex);
+    fragment.appendChild(span);
+  }
+  
+  return fragment;
+}
+
 function renderQuestion() {
   const z = $("qzone");
   z.className = "";
   pendingWinners = new Set();
+  
+  // Clear existing content
+  z.innerHTML = "";
+  
   if (state.phase === "team") {
     const team = state.teams[state.turn];
     const q = state.questions.team[state.qi.team % state.questions.team.length];
@@ -628,39 +684,93 @@ function renderQuestion() {
     z.style.color = "#fff";
     const ph = photoFor(team, team.months);
     const imgSrc = ph ? ph.src : placeholderSVG(yearsOf(team.months), team.color);
-    z.innerHTML = `
-      <div class="plaque">
-        <img src="${imgSrc}" alt="">
-        <div class="caption">${esc(team.name)}</div>
-        <div class="bigage" id="plaqueAge">${ageLabel(team.months)}</div>
-      </div>
-      <div class="qmain">
-        <div class="qheader">Manche ${state.round} — Question pour ${esc(team.name)}</div>
-        <div class="qtext">${esc(q)}</div>
-        <div class="qquote">${quote()}</div>
-        <div class="qactions">
-          <button class="btn green" id="btnOk">✅ Réussie (+${state.settings.winYears} an${state.settings.winYears > 1 ? "s" : ""})</button>
-          <button class="btn red" id="btnKo">❌ Ratée (+${state.settings.failMonths} mois)</button>
-        </div>
-      </div>`;
+    
+    // Create plaque
+    const plaque = document.createElement('div');
+    plaque.className = 'plaque';
+    plaque.innerHTML = `
+      <img src="${imgSrc}" alt="">
+      <div class="caption">${esc(team.name)}</div>
+      <div class="bigage" id="plaqueAge">${ageLabel(team.months)}</div>`;
+    z.appendChild(plaque);
+    
+    // Create qmain
+    const qmain = document.createElement('div');
+    qmain.className = 'qmain';
+    
+    const qheader = document.createElement('div');
+    qheader.className = 'qheader';
+    qheader.textContent = `Manche ${state.round} — Question pour ${esc(team.name)}`;
+    qmain.appendChild(qheader);
+    
+    const qtext = document.createElement('div');
+    qtext.className = 'qtext';
+    qtext.appendChild(parseQuestionWithImages(q));
+    qmain.appendChild(qtext);
+    
+    const qquote = document.createElement('div');
+    qquote.className = 'qquote';
+    qquote.innerHTML = quote();
+    qmain.appendChild(qquote);
+    
+    const qactions = document.createElement('div');
+    qactions.className = 'qactions';
+    qactions.innerHTML = `
+      <button class="btn green" id="btnOk">✅ Réussie (+${state.settings.winYears} an${state.settings.winYears > 1 ? "s" : ""})</button>
+      <button class="btn red" id="btnKo">❌ Ratée (+${state.settings.failMonths} mois)</button>`;
+    qmain.appendChild(qactions);
+    z.appendChild(qmain);
+    
     $("btnOk").onclick = () => resolveTeam(team, Math.round(state.settings.winYears * 12));
     $("btnKo").onclick = () => resolveTeam(team, state.settings.failMonths);
   } else {
     const q = state.questions.general[state.qi.general % state.questions.general.length];
     z.classList.add("general");
-    z.innerHTML = `
-      <div class="qmain" style="width:100%">
-        <div class="qheader">🌍 Manche ${state.round} — Question générale (toutes les équipes !)</div>
-        <div class="qtext">${esc(q)}</div>
-        <div class="qquote">${quote()}</div>
-        <div class="qheader" style="margin-top:.4rem">Quelle équipe a gagné ? (clique une ou plusieurs équipes)</div>
-        <div id="winnerPick">
-          ${state.teams.map((t, i) => `<button class="chip" data-i="${i}" style="border-color:${t.color}">${esc(t.name)}</button>`).join("")}
-        </div>
-        <div class="qactions">
-          <button class="btn primary" id="btnValGen" disabled>✔ Valider (+${state.settings.genYears} an${state.settings.genYears > 1 ? "s" : ""} aux gagnants)</button>
-        </div>
-      </div>`;
+    
+    const qmain = document.createElement('div');
+    qmain.className = 'qmain';
+    qmain.style.width = "100%";
+    
+    const qheader = document.createElement('div');
+    qheader.className = 'qheader';
+    qheader.innerHTML = "🌍 Manche " + state.round + " — Question générale (toutes les équipes !)";
+    qmain.appendChild(qheader);
+    
+    const qtext = document.createElement('div');
+    qtext.className = 'qtext';
+    qtext.appendChild(parseQuestionWithImages(q));
+    qmain.appendChild(qtext);
+    
+    const qquote = document.createElement('div');
+    qquote.className = 'qquote';
+    qquote.innerHTML = quote();
+    qmain.appendChild(qquote);
+    
+    const winnerLabel = document.createElement('div');
+    winnerLabel.className = 'qheader';
+    winnerLabel.style.marginTop = '.4rem';
+    winnerLabel.textContent = 'Quelle équipe a gagné ? (clique une ou plusieurs équipes)';
+    qmain.appendChild(winnerLabel);
+    
+    const winnerPick = document.createElement('div');
+    winnerPick.id = 'winnerPick';
+    winnerPick.style.margin = '.4rem 0';
+    state.teams.forEach((t, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.dataset.i = i;
+      btn.style.borderColor = t.color;
+      btn.textContent = esc(t.name);
+      winnerPick.appendChild(btn);
+    });
+    qmain.appendChild(winnerPick);
+    
+    const qactions = document.createElement('div');
+    qactions.className = 'qactions';
+    qactions.innerHTML = `<button class="btn primary" id="btnValGen" disabled>✔ Valider (+${state.settings.genYears} an${state.settings.genYears > 1 ? "s" : ""} aux gagnants)</button>`;
+    qmain.appendChild(qactions);
+    z.appendChild(qmain);
+    
     z.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
       const i = +c.dataset.i;
       if (pendingWinners.has(i)) pendingWinners.delete(i); else pendingWinners.add(i);
