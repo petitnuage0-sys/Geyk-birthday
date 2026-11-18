@@ -705,7 +705,9 @@ function parseQuestion(text) {
     const lines = text.split('\n');
     const questionLines = lines.filter(line => {
       const trimmed = line.trim();
-      return !choiceRegex.test(trimmed) && !trimmed.match(/\[answer\].*\[\/answer\]/);
+      const isChoice = /^[A-Z]\.\s/.test(trimmed);
+      const isAnswer = /\[answer\].*\[\/answer\]/i.test(trimmed);
+      return !isChoice && !isAnswer;
     });
     result.text = questionLines.join('\n').trim();
   } else {
@@ -1289,3 +1291,4 @@ if (state.started) {
 </script>
 </body>
 </html>
+
