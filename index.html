@@ -183,6 +183,15 @@
   #agingOverlay .cake{font-size:4rem}
   #agingOverlay .num{font-size:4.5rem;font-weight:bold;color:var(--gold)}
   #agingOverlay .lbl{font-size:1.3rem}
+  #agingOverlay .photo{
+    width:200px;height:267px;border-radius:12px;
+    border:4px solid var(--gold);
+    background:#fff;overflow:hidden;
+    box-shadow:0 4px 16px rgba(255,215,0,0.4);
+  }
+  #agingOverlay .photo img{
+    width:100%;height:100%;object-fit:cover;
+  }
 
   /* ===== END SCREEN ===== */
   #endZone{text-align:center;padding:2rem}
@@ -384,6 +393,7 @@
 <div id="agingOverlay">
   <div class="cake">🎂</div>
   <div class="num" id="agingNum">0 ans</div>
+  <div class="photo" id="agingPhoto"><img src="" alt=""></div>
   <div class="lbl" id="agingLbl"></div>
 </div>
 
@@ -1126,12 +1136,27 @@ function animateAging(team, from, to, done) {
   const ov = $("agingOverlay");
   const num = $("agingNum");
   const lbl = $("agingLbl");
+  const agingPhoto = $("agingPhoto");
+  const agingPhotoImg = agingPhoto ? agingPhoto.querySelector('img') : null;
   lbl.textContent = esc(team.name) + " vieillit…";
   ov.classList.add("on");
   const diff = to - from;
   const step = Math.max(1, Math.ceil(diff / 36));
   let cur = from;
   let lastYear = yearsOf(from);
+  
+  // Initialiser la photo avec l'âge de départ
+  if (agingPhotoImg) {
+    const initialPh = photoFor(team, from);
+    if (initialPh) {
+      agingPhotoImg.src = initialPh.src;
+      agingPhoto.style.borderColor = team.color;
+    } else {
+      agingPhotoImg.src = placeholderSVG(yearsOf(from), team.color);
+      agingPhoto.style.borderColor = team.color;
+    }
+  }
+  
   const iv = setInterval(() => {
     cur = Math.min(to, cur + step);
     const y = yearsOf(cur), mo = monthsOf(cur);
@@ -1143,6 +1168,9 @@ function animateAging(team, from, to, done) {
       if (img && ph) img.src = ph.src;
       const pa = document.querySelector("#plaqueAge");
       if (pa) pa.textContent = ageLabel(cur);
+      if (agingPhotoImg && ph) {
+        agingPhotoImg.src = ph.src;
+      }
     }
     const ageEl = $("age-" + state.teams.indexOf(team));
     if (ageEl) ageEl.textContent = ageLabel(cur);
